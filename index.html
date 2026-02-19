@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Valoración entrevista</title>
+
+<style>
+:root{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --text:#111;
+  --soft:#eef0f6;
+
+  --danger:#d32f2f;
+  --warn:#f9a825;
+  --ok:#2e7d32;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1116;
+    --card:#171a22;
+    --text:#f2f4f8;
+    --soft:#232737;
+  }
+}
+
+html, body {
+  touch-action: manipulation;
+  overscroll-behavior: contain;
+}
+
+body{ margin:0; background:var(--bg); color:var(--text); }
+.wrap{ max-width:520px; margin:auto; padding:16px; }
+.card{ background:var(--card); border-radius:16px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08); }
+
+/* Medidor circular */
+.meterArea{ display:flex; justify-content:center; margin-bottom:10px; }
+.meter{ width:220px; height:220px; position:relative; }
+.meter svg{ width:100%; height:100%; transform:rotate(-90deg); }
+.track{ stroke:var(--soft); stroke-width:14; fill:none; }
+.progress{ stroke:var(--danger); stroke-width:14; fill:none; stroke-linecap:round; transition:.2s; }
+
+.meterCenter{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  justify-content:center; align-items:center;
+}
+#total{ font-size:64px; font-weight:900; transition:.2s; }
+#badge{ font-size:14px; opacity:.7; }
+
+/* Barra horizontal */
+.progressBar{ height:14px; background:var(--soft); border-radius:999px; overflow:hidden; margin-bottom:16px;}
+#progressFill{ height:100%; width:0%; background:var(--danger); transition:.2s; }
+
+/* Sliders */
+.row{ margin-bottom:18px; }
+.rowHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:6px;
+}
+.rowHeader label{ font-weight:600; }
+.scoreValue{
+  font-weight:700;
+  min-width:64px;
+  text-align:right;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type=range]{
+  width:100%;
+  height:8px;
+  border-radius:999px;
+  background:var(--soft);
+  outline:none;
+  touch-action: pan-y; /* importante para evitar gestos raros */
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:24px; height:24px;
+  border-radius:50%;
+  background:var(--text);
+}
+
+/* Extra +0,5 */
+.extraRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 10px;
+  border-radius:12px;
+  background: var(--soft);
+  margin: 6px 0 18px;
+}
+.extraRow .left{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.extraRow .title{ font-weight:700; }
+.extraRow .hint{ font-size:12px; opacity:.75; }
+.extraRow .right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.extraBadge{
+  font-weight:800;
+  min-width:54px;
+  text-align:right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Switch */
+.switch{
+  position:relative;
+  width:52px;
+  height:30px;
+  flex: 0 0 auto;
+}
+.switch input{ display:none; }
+.slider{
+  position:absolute;
+  cursor:pointer;
+  inset:0;
+  background:#b7bcc7;
+  border-radius:999px;
+  transition:.2s;
+}
+.slider:before{
+  content:"";
+  position:absolute;
+  height:24px;
+  width:24px;
+  left:3px;
+  top:3px;
+  background:white;
+  border-radius:50%;
+  transition:.2s;
+}
+.switch input:checked + .slider{
+  background: #3bb54a;
+}
+.switch input:checked + .slider:before{
+  transform: translateX(22px);
+}
+
+button{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  background:var(--soft);
+  color:var(--text);
+  font-weight:600;
+}
+
+/* Confeti */
+#confettiCanvas{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:999;
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="card">
+
+    <div class="meterArea">
+      <div class="meter">
+        <svg viewBox="0 0 220 220">
+          <circle class="track" cx="110" cy="110" r="92"></circle>
+          <circle id="ring" class="progress" cx="110" cy="110" r="92"></circle>
+        </svg>
+        <div class="meterCenter">
+          <div id="total">0,0</div>
+          <div id="badge">0,0 / 10</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progressBar">
+      <div id="progressFill"></div>
+    </div>
+
+    <div id="list"></div>
+
+    <!-- Extra +0,5 -->
+    <div class="extraRow">
+      <div class="left">
+        <div class="title">Extra</div>
+        <div class="hint">Marca +0,5 si procede</div>
+      </div>
+      <div class="right">
+        <div class="extraBadge" id="extraBadge">0,0</div>
+        <label class="switch" aria-label="Extra +0,5">
+          <input id="extraToggle" type="checkbox">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <button id="reset">Reiniciar</button>
+
+  </div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+
+<script>
+/*
+  Ponderaciones máximas:
+  - Normativa:     0,5
+  - Presentación:  1,5
+  - Funciones:     3,0
+  - Experiencia:   3,0
+  - Aportación:    1,5
+  Total base:      9,5
+  Extra:           +0,5  => Total máx: 10,0
+
+  Internamente guardamos "décimas" enteras:
+  0,1 => 1,0 punto = 10 décimas.
+*/
+
+const CRITERIOS = [
+  { key:"normativa",    label:"Normativa",    maxTenths:  5 }, // 0,5
+  { key:"presentacion", label:"Presentación", maxTenths: 15 }, // 1,5
+  { key:"funciones",    label:"Funciones",    maxTenths: 30 }, // 3,0
+  { key:"experiencia",  label:"Experiencia",  maxTenths: 30 }, // 3,0
+  { key:"aportacion",   label:"Aportación",   maxTenths: 15 }, // 1,5
+];
+
+const EXTRA_TENTHS = 5; // +0,5
+const STORE = "valoracion_pesos_confeti_escalado_v1";
+
+const ring = document.getElementById("ring");
+const totalEl = document.getElementById("total");
+const badge = document.getElementById("badge");
+const fill = document.getElementById("progressFill");
+const extraToggle = document.getElementById("extraToggle");
+const extraBadge = document.getElementById("extraBadge");
+
+const R = 92;
+const C = 2*Math.PI*R;
+ring.style.strokeDasharray = C;
+ring.style.strokeDashoffset = C;
+
+function format(n){ return n.toFixed(1).replace(".",","); }
+function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+let state = (() => {
+  try{
+    const raw = localStorage.getItem(STORE);
+    const parsed = raw ? JSON.parse(raw) : {};
+    CRITERIOS.forEach(c => {
+      if (typeof parsed[c.key] !== "number") parsed[c.key] = 0;
+      parsed[c.key] = clamp(Math.round(parsed[c.key]), 0, c.maxTenths);
+    });
+    parsed.extra = (parsed.extra === EXTRA_TENTHS) ? EXTRA_TENTHS : 0;
+    return parsed;
+  }catch{
+    const init = { extra: 0 };
+    CRITERIOS.forEach(c => init[c.key]=0);
+    return init;
+  }
+})();
+
+let lastBand = null;
+
+// Flags de confeti por niveles
+let confettiLaunchedSoft = false; // >= 9,0
+let confettiLaunchedMid  = false; // >= 9,5
+let confettiLaunchedMax  = false; // == 10,0
+
+function getBand(total){ // total en puntos (0..10)
+  if(total < 5) return "red";
+  if(total < 7) return "yellow";
+  return "green";
+}
+function getColor(b){
+  if(b==="red") return "#d32f2f";
+  if(b==="yellow") return "#f9a825";
+  return "#2e7d32";
+}
+
+function totalTenths(){
+  const sum = CRITERIOS.reduce((acc,c)=> acc + (state[c.key]||0), 0);
+  return sum + (state.extra || 0); // 0..100
+}
+
+function update(){
+  const tt = totalTenths();      // 0..100 (décimas)
+  const total = tt / 10;         // 0..10 (puntos)
+
+  totalEl.textContent = format(total);
+  badge.textContent = format(total) + " / 10";
+
+  const pct = tt / 100;          // 0..1
+  ring.style.strokeDashoffset = C*(1-pct);
+  fill.style.width = (pct*100) + "%";
+
+  const band = getBand(total);
+  const color = getColor(band);
+  ring.style.stroke = color;
+  fill.style.background = color;
+  totalEl.style.color = color;
+
+  // Extra UI
+  extraToggle.checked = (state.extra === EXTRA_TENTHS);
+  extraBadge.textContent = format((state.extra||0)/10);
+
+  if(band==="green" && lastBand!=="green"){
+    if(navigator.vibrate) navigator.vibrate([80,60,120]);
+  }
+
+  // Confeti escalonado:
+  //  >= 9,0 (90 décimas): soft
+  //  >= 9,5 (95 décimas): mid
+  //  = 10,0 (100 décimas): max
+  if (tt >= 100 && !confettiLaunchedMax) {
+    launchConfetti("max");
+    confettiLaunchedMax = true;
+  }
+  if (tt >= 95 && !confettiLaunchedMid) {
+    launchConfetti("mid");
+    confettiLaunchedMid = true;
+  }
+  if (tt >= 90 && !confettiLaunchedSoft) {
+    launchConfetti("soft");
+    confettiLaunchedSoft = true;
+  }
+
+  // Reset por tramos al bajar
+  if (tt < 100) confettiLaunchedMax = false;
+  if (tt < 95)  confettiLaunchedMid = false;
+  if (tt < 90)  confettiLaunchedSoft = false;
+
+  lastBand = band;
+  localStorage.setItem(STORE, JSON.stringify(state));
+}
+
+function render(){
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  CRITERIOS.forEach(c => {
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const header = document.createElement("div");
+    header.className = "rowHeader";
+
+    const label = document.createElement("label");
+    label.textContent = `${c.label} (máx ${format(c.maxTenths/10)})`;
+
+    const value = document.createElement("div");
+    value.className = "scoreValue";
+    value.textContent = format((state[c.key]||0)/10);
+
+    header.append(label, value);
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = 0;
+    range.max = (c.maxTenths/10).toFixed(1);
+    range.step = 0.1;
+    range.value = ((state[c.key]||0)/10).toFixed(1);
+
+    range.addEventListener("input", () => {
+      const tenths = Math.round(parseFloat(range.value) * 10);
+      state[c.key] = clamp(tenths, 0, c.maxTenths);
+      value.textContent = format(state[c.key]/10);
+      update();
+    });
+
+    row.append(header, range);
+    list.appendChild(row);
+  });
+
+  update();
+}
+
+extraToggle.addEventListener("change", () => {
+  state.extra = extraToggle.checked ? EXTRA_TENTHS : 0;
+  update();
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  CRITERIOS.forEach(c => state[c.key] = 0);
+  state.extra = 0;
+
+  confettiLaunchedSoft = false;
+  confettiLaunchedMid = false;
+  confettiLaunchedMax = false;
+
+  localStorage.setItem(STORE, JSON.stringify(state));
+  render();
+});
+
+render();
+
+/* CONFETI (escalado) */
+const canvas = document.getElementById("confettiCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+function launchConfetti(level="soft"){
+  const pieces = [];
+  const colors = ["#ff5252","#ffca28","#66bb6a","#42a5f5","#ab47bc","#ff7043","#26c6da","#ffffff"];
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+
+  // Intensidad
+  let count = 160, speedMin = 4, speedMax = 9, frames = 170;
+  if(level === "mid"){ count = 240; speedMin = 5; speedMax = 12; frames = 200; }
+  if(level === "max"){ count = 360; speedMin = 6; speedMax = 15; frames = 240; }
+
+  for(let i = 0; i < count; i++){
+    const angle = Math.random() * 2 * Math.PI;
+    const speed = Math.random() * (speedMax - speedMin) + speedMin;
+
+    pieces.push({
+      x: centerX,
+      y: centerY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: Math.random() * 8 + 6,
+      color: colors[(Math.random()*colors.length)|0],
+      rot: Math.random() * Math.PI * 2,
+      rs: (Math.random() - 0.5) * 0.35
+    });
+  }
+
+  const gravity = 0.25;
+  let frame = 0;
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    pieces.forEach(p=>{
+      p.vy += gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.rs;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.7);
+      ctx.restore();
+    });
+
+    frame++;
+    if(frame < frames){
+      requestAnimationFrame(draw);
+    } else {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+  }
+
+  draw();
+}
+</script>
+</body>
+</html>
