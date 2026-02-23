@@ -36,20 +36,38 @@ body{ margin:0; background:var(--bg); color:var(--text); }
 .wrap{ max-width:520px; margin:auto; padding:16px; }
 .card{ background:var(--card); border-radius:16px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08); }
 
+/* Círculo + emoji (emoji fuera) */
+.meterRow{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  margin-bottom:10px;
+}
+
 /* Medidor circular */
-.meterArea{ display:flex; justify-content:center; margin-bottom:10px; }
-.meter{ width:220px; height:220px; position:relative; }
+.meter{ width:220px; height:220px; position:relative; flex:0 0 auto; }
 .meter svg{ width:100%; height:100%; transform:rotate(-90deg); }
 .track{ stroke:var(--soft); stroke-width:14; fill:none; }
 .progress{ stroke:var(--danger); stroke-width:14; fill:none; stroke-linecap:round; transition:.2s; }
 
 .meterCenter{
   position:absolute; inset:0;
-  display:flex; flex-direction:column;
-  justify-content:center; align-items:center;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
 }
-#total{ font-size:64px; font-weight:900; transition:.2s; }
-#badge{ font-size:14px; opacity:.7; }
+#total{ font-size:64px; font-weight:900; transition:.2s; line-height:1; }
+#badge{ font-size:14px; opacity:.7; margin-top:8px; }
+
+/* Emoji fuera */
+#emoji{
+  font-size:58px;
+  transition:.2s;
+  line-height:1;
+  user-select:none;
+}
 
 /* Barra horizontal */
 .progressBar{ height:14px; background:var(--soft); border-radius:999px; overflow:hidden; margin-bottom:16px;}
@@ -77,7 +95,7 @@ input[type=range]{
   border-radius:999px;
   background:var(--soft);
   outline:none;
-  touch-action: pan-y; /* importante para evitar gestos raros */
+  touch-action: pan-y; /* evita gestos raros */
 }
 input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none;
@@ -167,6 +185,12 @@ button{
   pointer-events:none;
   z-index:999;
 }
+
+/* En pantallas muy estrechas: emoji abajo */
+@media (max-width: 360px){
+  .meterRow{ flex-direction:column; gap:10px; }
+  #emoji{ font-size:54px; }
+}
 </style>
 </head>
 
@@ -174,7 +198,7 @@ button{
 <div class="wrap">
   <div class="card">
 
-    <div class="meterArea">
+    <div class="meterRow">
       <div class="meter">
         <svg viewBox="0 0 220 220">
           <circle class="track" cx="110" cy="110" r="92"></circle>
@@ -185,6 +209,7 @@ button{
           <div id="badge">0,0 / 10</div>
         </div>
       </div>
+      <div id="emoji">😬</div>
     </div>
 
     <div class="progressBar">
@@ -217,32 +242,37 @@ button{
 
 <script>
 /*
-  Ponderaciones máximas:
-  - Normativa:     0,5
-  - Presentación:  1,5
-  - Funciones:     3,0
-  - Experiencia:   3,0
-  - Aportación:    1,5
-  Total base:      9,5
-  Extra:           +0,5  => Total máx: 10,0
+  Criterios (máximos):
+  - Normativa:          0,3
+  - Presentación:       1,0
+  - Funciones:          3,0
+  - Experiencia:        3,0
+  - Experiencia SSMM:   1,5
+  - Aportación:         0,2
+  - Aportación SSMM:    0,5
+  Total base:           9,5
+  Extra:               +0,5 => Total máx: 10,0
 
   Internamente guardamos "décimas" enteras:
-  0,1 => 1,0 punto = 10 décimas.
+  0,1 punto = 1 décima.
 */
 
 const CRITERIOS = [
-  { key:"normativa",    label:"Normativa",    maxTenths:  5 }, // 0,5
-  { key:"presentacion", label:"Presentación", maxTenths: 15 }, // 1,5
-  { key:"funciones",    label:"Funciones",    maxTenths: 30 }, // 3,0
-  { key:"experiencia",  label:"Experiencia",  maxTenths: 30 }, // 3,0
-  { key:"aportacion",   label:"Aportación",   maxTenths: 15 }, // 1,5
+  { key:"normativa",         label:"Normativa",        maxTenths:  3 }, // 0,3
+  { key:"presentacion",      label:"Presentación",     maxTenths: 10 }, // 1,0
+  { key:"funciones",         label:"Funciones",        maxTenths: 30 }, // 3,0
+  { key:"experiencia",       label:"Experiencia",      maxTenths: 30 }, // 3,0
+  { key:"experiencia_ssmm",  label:"Experiencia SS.SS.MM.", maxTenths: 15 }, // 1,5
+  { key:"aportacion",        label:"Aportación",       maxTenths:  2 }, // 0,2
+  { key:"aportacion_ssmm",   label:"Aportación SS.SS.MM.",  maxTenths:  5 }, // 0,5
 ];
 
 const EXTRA_TENTHS = 5; // +0,5
-const STORE = "valoracion_pesos_confeti_escalado_v1";
+const STORE = "valoracion_confeti_v4_emoji_fuera";
 
 const ring = document.getElementById("ring");
 const totalEl = document.getElementById("total");
+const emojiEl = document.getElementById("emoji");
 const badge = document.getElementById("badge");
 const fill = document.getElementById("progressFill");
 const extraToggle = document.getElementById("extraToggle");
@@ -256,6 +286,53 @@ ring.style.strokeDashoffset = C;
 function format(n){ return n.toFixed(1).replace(".",","); }
 function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
 
+/* ========= Sonido compatible (Web Audio API) ========= */
+let audioCtx = null;
+
+function getAudioCtx(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!audioCtx) audioCtx = new AC();
+  return audioCtx;
+}
+
+async function playExtraSound(){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch(e) {}
+  }
+
+  const now = ctx.currentTime;
+
+  // "ding" doble corto
+  const o1 = ctx.createOscillator();
+  const g1 = ctx.createGain();
+  o1.type = "sine";
+  o1.frequency.setValueAtTime(880, now);
+  g1.gain.setValueAtTime(0.0001, now);
+  g1.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+  g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+  o1.connect(g1);
+  g1.connect(ctx.destination);
+  o1.start(now);
+  o1.stop(now + 0.16);
+
+  const o2 = ctx.createOscillator();
+  const g2 = ctx.createGain();
+  o2.type = "sine";
+  o2.frequency.setValueAtTime(1175, now + 0.16);
+  g2.gain.setValueAtTime(0.0001, now + 0.16);
+  g2.gain.exponentialRampToValueAtTime(0.16, now + 0.18);
+  g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.30);
+  o2.connect(g2);
+  g2.connect(ctx.destination);
+  o2.start(now + 0.16);
+  o2.stop(now + 0.32);
+}
+
+/* ========= Estado ========= */
 let state = (() => {
   try{
     const raw = localStorage.getItem(STORE);
@@ -275,12 +352,10 @@ let state = (() => {
 
 let lastBand = null;
 
-// Flags de confeti por niveles
-let confettiLaunchedSoft = false; // >= 9,0
-let confettiLaunchedMid  = false; // >= 9,5
-let confettiLaunchedMax  = false; // == 10,0
+// Confeti único (máximo) a partir de 7,0
+let confettiLaunched = false;
 
-function getBand(total){ // total en puntos (0..10)
+function getBand(total){
   if(total < 5) return "red";
   if(total < 7) return "yellow";
   return "green";
@@ -291,19 +366,35 @@ function getColor(b){
   return "#2e7d32";
 }
 
+
+function getEmoji(total){
+  if (total === 10) return "🏆";
+  if (total >= 9)  return "🤩";
+  if (total >= 8)  return "🚀";
+  if (total >= 7)  return "😎";
+  if (total >= 6)  return "😊";
+  if (total >= 5)  return "🙂";
+  if (total >= 4)  return "😬";
+  if (total >= 3)  return "😕";
+  if (total >= 2)  return "😫";
+  if (total >= 1)  return "😭";
+  return "😵";
+}
+
 function totalTenths(){
   const sum = CRITERIOS.reduce((acc,c)=> acc + (state[c.key]||0), 0);
   return sum + (state.extra || 0); // 0..100
 }
 
 function update(){
-  const tt = totalTenths();      // 0..100 (décimas)
-  const total = tt / 10;         // 0..10 (puntos)
+  const tt = totalTenths();   // 0..100 (décimas)
+  const total = tt / 10;      // 0..10
 
   totalEl.textContent = format(total);
   badge.textContent = format(total) + " / 10";
+  emojiEl.textContent = getEmoji(total);
 
-  const pct = tt / 100;          // 0..1
+  const pct = tt / 100;
   ring.style.strokeDashoffset = C*(1-pct);
   fill.style.width = (pct*100) + "%";
 
@@ -318,30 +409,15 @@ function update(){
   extraBadge.textContent = format((state.extra||0)/10);
 
   if(band==="green" && lastBand!=="green"){
-    if(navigator.vibrate) navigator.vibrate([80,60,120]);
+    if(navigator.vibrate) navigator.vibrate([60,40,90]);
   }
 
-  // Confeti escalonado:
-  //  >= 9,0 (90 décimas): soft
-  //  >= 9,5 (95 décimas): mid
-  //  = 10,0 (100 décimas): max
-  if (tt >= 100 && !confettiLaunchedMax) {
-    launchConfetti("max");
-    confettiLaunchedMax = true;
+  // Confeti máximo a partir de 7,0 (70 décimas)
+  if (tt >= 70 && !confettiLaunched) {
+    launchConfetti();
+    confettiLaunched = true;
   }
-  if (tt >= 95 && !confettiLaunchedMid) {
-    launchConfetti("mid");
-    confettiLaunchedMid = true;
-  }
-  if (tt >= 90 && !confettiLaunchedSoft) {
-    launchConfetti("soft");
-    confettiLaunchedSoft = true;
-  }
-
-  // Reset por tramos al bajar
-  if (tt < 100) confettiLaunchedMax = false;
-  if (tt < 95)  confettiLaunchedMid = false;
-  if (tt < 90)  confettiLaunchedSoft = false;
+  if (tt < 70) confettiLaunched = false;
 
   lastBand = band;
   localStorage.setItem(STORE, JSON.stringify(state));
@@ -372,7 +448,9 @@ function render(){
     range.min = 0;
     range.max = (c.maxTenths/10).toFixed(1);
     range.step = 0.1;
-    range.value = ((state[c.key]||0)/10).toFixed(1);
+
+    const current = clamp(state[c.key]||0, 0, c.maxTenths);
+    range.value = (current/10).toFixed(1);
 
     range.addEventListener("input", () => {
       const tenths = Math.round(parseFloat(range.value) * 10);
@@ -388,18 +466,20 @@ function render(){
   update();
 }
 
-extraToggle.addEventListener("change", () => {
-  state.extra = extraToggle.checked ? EXTRA_TENTHS : 0;
+extraToggle.addEventListener("change", async () => {
+  const turningOn = extraToggle.checked;
+  state.extra = turningOn ? EXTRA_TENTHS : 0;
+
+  // sonido SOLO al activar
+  if (turningOn) playExtraSound();
+
   update();
 });
 
 document.getElementById("reset").addEventListener("click", () => {
   CRITERIOS.forEach(c => state[c.key] = 0);
   state.extra = 0;
-
-  confettiLaunchedSoft = false;
-  confettiLaunchedMid = false;
-  confettiLaunchedMax = false;
+  confettiLaunched = false;
 
   localStorage.setItem(STORE, JSON.stringify(state));
   render();
@@ -407,7 +487,7 @@ document.getElementById("reset").addEventListener("click", () => {
 
 render();
 
-/* CONFETI (escalado) */
+/* ========= CONFETI (máximo) ========= */
 const canvas = document.getElementById("confettiCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -418,17 +498,16 @@ function resizeCanvas(){
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-function launchConfetti(level="soft"){
+function launchConfetti(){
   const pieces = [];
   const colors = ["#ff5252","#ffca28","#66bb6a","#42a5f5","#ab47bc","#ff7043","#26c6da","#ffffff"];
 
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
 
-  // Intensidad
-  let count = 160, speedMin = 4, speedMax = 9, frames = 170;
-  if(level === "mid"){ count = 240; speedMin = 5; speedMax = 12; frames = 200; }
-  if(level === "max"){ count = 360; speedMin = 6; speedMax = 15; frames = 240; }
+  const count = 360;
+  const speedMin = 6, speedMax = 15;
+  const frames = 240;
 
   for(let i = 0; i < count; i++){
     const angle = Math.random() * 2 * Math.PI;
